@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <title>Test Click-to-Call</title>
+</head>
+<body>
+  <h1>Tester Click-to-Call</h1>
+  <form id="callForm">
+    <label>
+      Numéro Employé :<br />
+      <input type="tel" id="employeePhone" placeholder="+22507XXXXXXX" required />
+    </label>
+    <br /><br />
+    <label>
+      Numéro Client :<br />
+      <input type="tel" id="clientPhone" placeholder="+22501XXXXXXX" required />
+    </label>
+    <br /><br />
+    <button type="submit">Lancer l'appel</button>
+  </form>
+
+  <p id="response"></p>
+
+  <script>
+    const form = document.getElementById('callForm');
+    const responseP = document.getElementById('response');
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+
+      const employeePhone = document.getElementById('employeePhone').value.trim();
+      const clientPhone = document.getElementById('clientPhone').value.trim();
+
+      try {
+        const res = await fetch('/click-to-call', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ employeePhone, clientPhone }),
+        });
+
+        const text = await res.text();
+
+        if (res.ok) {
+          responseP.textContent = 'Succès : ' + text;
+        } else {
+          responseP.textContent = 'Erreur : ' + text;
+        }
+      } catch (err) {
+        responseP.textContent = 'Erreur réseau ou serveur.';
+      }
+    });
+  </script>
+</body>
+</html>
