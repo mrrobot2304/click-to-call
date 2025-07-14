@@ -11,6 +11,11 @@ const client = twilio(
   process.env.TWILIO_AUTH_TOKEN
 );
 
+// Route racine pour vérifier que le serveur tourne
+app.get('/', (req, res) => {
+  res.send('API Click-to-Call is running. Use POST /click-to-call to make a call.');
+});
+
 // Route pour lancer l'appel
 app.post('/click-to-call', async (req, res) => {
   const { employeePhone, clientPhone } = req.body;
