@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="fr">
+    <head>
+    <meta charset="UTF-8" />
+    <title>Appel via Twilio</title>
+    <style>
+        body { font-family: sans-serif; padding: 10px; }
+        button {
+        background-color: #0073e6;
+        color: white;
+        padding: 10px 15px;
+        border: none;
+        border-radius: 5px;
+        cursor: pointer;
+        }
+    </style>
+    </head>
+    <body>
+    <h3>Appeler ce client</h3>
+    <div id="root">Chargement…</div>
+
+    <script>
+        window.addEventListener("message", async (event) => {
+        if (event.data.type === "INITIALIZE") {
+            const data = event.data.data;
+            const clientPhone = data.properties.phone;
+            const employeeEmail = data.user.email; // email utilisateur connecté HubSpot
+
+            const root = document.getElementById("root");
+
+            if (!clientPhone) {
+            root.innerHTML = "Aucun numéro client.";
+            return;
+            }
+
+            const button = document.createElement("button");
+            button.textContent = "Appeler " + clientPhone;
+            button.onclick = async () => {
+            try {
+                const res = await fetch("https://click-to-call-app.onrender.com/click-to-call", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ employeeEmail, clientPhone }),
+                });
+
+                const text = await res.text();
+                alert(text);
+            } catch (e) {
+                alert("Erreur lors de l’appel");
+            }
+            };
+
+            root.innerHTML = '';
+            root.appendChild(button);
+        }
+        });
+    </script>
+    </body>
+</html>
