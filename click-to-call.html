@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <title>Appel via Twilio</title>
+  <style>
+    body {
+      font-family: sans-serif;
+      padding: 20px;
+    }
+    button {
+      background-color: #0073e6;
+      color: white;
+      padding: 10px 15px;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+      font-size: 16px;
+    }
+    #info {
+      margin-bottom: 20px;
+    }
+  </style>
+</head>
+<body>
+  <h2>Appeler ce client</h2>
+  <div id="info">Chargement...</div>
+  <button id="callButton" style="display:none">📞 Lancer l'appel</button>
+
+  <script>
+    // Extraire les paramètres de l'URL
+    const params = new URLSearchParams(window.location.search);
+    const employeeEmail = params.get("employeeEmail");
+    const clientPhone = params.get("clientPhone");
+
+    const info = document.getElementById("info");
+    const callButton = document.getElementById("callButton");
+
+    if (!employeeEmail || !clientPhone) {
+      info.textContent = "Paramètres manquants.";
+    } else {
+      info.innerHTML = `
+        <strong>Employé :</strong> ${employeeEmail}<br />
+        <strong>Client :</strong> ${clientPhone}
+      `;
+      callButton.style.display = "inline-block";
+    }
+
+    callButton.onclick = async () => {
+      callButton.disabled = true;
+      callButton.textContent = "Appel en cours...";
+
+      try {
+        const res = await fetch("/click-to-call", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ employeeEmail, clientPhone }),
+        });
+
+        const text = await res.text();
+        alert("✅ " + text);
+      } catch (e) {
+        alert("❌ Erreur lors de l'appel");
+      } finally {
+        callButton.disabled = false;
+        callButton.textContent = "📞 Lancer l'appel";
+      }
+    };
+  </script>
+</body>
+</html>
