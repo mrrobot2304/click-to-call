@@ -15,8 +15,8 @@ const client = twilio(
 
 // 💾 Mapping des utilisateurs HubSpot → numéros Twilio
 const employeeTwilioMap = {
-  "guy@tonentreprise.com": "+14155552671",
-  "sandra@tonentreprise.com": "+14155552672",
+  "janice@glive.ca": "+14506001665",
+  //"sandra@tonentreprise.com": "+14155552672",
   // Ajoute ici tous tes employés
 };
 
