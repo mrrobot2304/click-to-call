@@ -54,7 +54,7 @@ app.post('/voice', (req, res) => {
   const VoiceResponse = twilio.twiml.VoiceResponse;
   const twiml = new VoiceResponse();
 
-  const clientPhone = req.body.To;
+  const clientPhone = req.body.To || req.query.To;
 
   if (clientPhone) {
     const dial = twiml.dial();
