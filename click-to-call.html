@@ -2,33 +2,64 @@
 <html lang="fr">
 <head>
   <meta charset="UTF-8" />
-  <title>Appel via Twilio</title>
+  <title>Appel</title>
   <style>
     body {
-      font-family: sans-serif;
-      padding: 20px;
+      font-family: "Segoe UI", sans-serif;
+      margin: 0;
+      padding: 16px;
+      background-color: #f8f9fa;
+      color: #2c3e50;
+      font-size: 14px;
+      width: 100%;
     }
+
+    .container {
+      background: white;
+      border-radius: 8px;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+      padding: 20px;
+      max-width: 320px;
+      margin: 0 auto;
+    }
+
+    h3 {
+      margin-top: 0;
+      font-size: 16px;
+      color: #33475b;
+    }
+
+    p {
+      margin: 4px 0 12px;
+      font-size: 13px;
+    }
+
     button {
       background-color: #0073e6;
       color: white;
-      padding: 10px 15px;
+      padding: 8px 14px;
       border: none;
-      border-radius: 5px;
+      border-radius: 4px;
       cursor: pointer;
-      font-size: 16px;
+      font-weight: 500;
+      font-size: 14px;
+      width: 100%;
     }
-    #info {
-      margin-bottom: 20px;
+
+    button:disabled {
+      background-color: #a5b7c8;
+      cursor: not-allowed;
     }
   </style>
 </head>
 <body>
-  <h2>Appeler ce client</h2>
-  <div id="info">Chargement...</div>
-  <button id="callButton" style="display:none">📞 Lancer l'appel</button>
+  <div class="container">
+    <h3>Appel vers client</h3>
+    <p id="info">Chargement...</p>
+    <button id="callButton" style="display: none">📞 Appeler maintenant</button>
+  </div>
 
   <script>
-    // Extraire les paramètres de l'URL
     const params = new URLSearchParams(window.location.search);
     const employeeEmail = params.get("employeeEmail");
     const clientPhone = params.get("clientPhone");
@@ -39,16 +70,13 @@
     if (!employeeEmail || !clientPhone) {
       info.textContent = "Paramètres manquants.";
     } else {
-      info.innerHTML = `
-        <strong>Employé :</strong> ${employeeEmail}<br />
-        <strong>Client :</strong> ${clientPhone}
-      `;
-      callButton.style.display = "inline-block";
+      info.innerHTML = `<strong>Client :</strong> ${clientPhone}`;
+      callButton.style.display = "block";
     }
 
     callButton.onclick = async () => {
       callButton.disabled = true;
-      callButton.textContent = "Appel en cours...";
+      callButton.textContent = "⏳ Appel en cours...";
 
       try {
         const res = await fetch("/click-to-call", {
@@ -63,7 +91,7 @@
         alert("❌ Erreur lors de l'appel");
       } finally {
         callButton.disabled = false;
-        callButton.textContent = "📞 Lancer l'appel";
+        callButton.textContent = "📞 Appeler maintenant";
       }
     };
   </script>
