@@ -3,71 +3,77 @@ const express = require('express');
 const bodyParser = require('body-parser');
 const path = require('path');
 const twilio = require('twilio');
+const cors = require('cors'); // ✅ Import du middleware CORS
+
+// Twilio JWT AccessToken
+const AccessToken = twilio.jwt.AccessToken;
+const VoiceGrant = AccessToken.VoiceGrant;
 
 const app = express();
+app.use(cors()); // ✅ Active CORS pour toutes les origines
 app.use(bodyParser.json());
 app.use(express.static(path.join(__dirname)));
 
-// Initialisation Twilio Client
+// Twilio client
 const client = twilio(
   process.env.TWILIO_ACCOUNT_SID,
   process.env.TWILIO_AUTH_TOKEN
 );
 
-// JWT Token pour Twilio Client WebRTC
-const AccessToken = twilio.jwt.AccessToken;
-const VoiceGrant = AccessToken.VoiceGrant;
-
-// 💾 Mapping des employés pour version /click-to-call (optionnel)
+// 💾 Mapping des utilisateurs HubSpot → numéros Twilio
 const employeeTwilioMap = {
   "janice@glive.ca": "+14506001665",
-  // Ajoute ici d'autres emails
+  // "sandra@tonentreprise.com": "+14155552672",
 };
 
-// 🔸 Endpoint de base
+// ✅ Route de test
 app.get('/', (req, res) => {
-  res.send('✅ API Click-to-Call & Twilio Client is running.');
+  res.send('✅ API Click-to-Call is running. Use POST /click-to-call or GET /token');
 });
 
-// 🔸 Endpoint token JWT pour Twilio Client JS SDK
+// ✅ Endpoint pour générer un token Twilio Client (WebRTC)
 app.get('/token', (req, res) => {
-  const identity = req.query.email || 'anonymous';
+  try {
+    const identity = req.query.email || 'anonymous';
 
-  const voiceGrant = new VoiceGrant({
-    outgoingApplicationSid: process.env.TWIML_APP_SID,
-    incomingAllow: true,
-  });
+    const voiceGrant = new VoiceGrant({
+      outgoingApplicationSid: process.env.TWIML_APP_SID,
+      incomingAllow: true
+    });
 
-  const token = new AccessToken(
-    process.env.TWILIO_ACCOUNT_SID,
-    process.env.TWILIO_API_KEY,
-    process.env.TWILIO_API_SECRET,
-    { identity }
-  );
+    const token = new AccessToken(
+      process.env.TWILIO_ACCOUNT_SID,
+      process.env.TWILIO_API_KEY,
+      process.env.TWILIO_API_SECRET,
+      { identity }
+    );
 
-  token.addGrant(voiceGrant);
-  res.send({ token: token.toJwt() });
+    token.addGrant(voiceGrant);
+
+    res.send({ token: token.toJwt() });
+  } catch (err) {
+    console.error("Erreur lors de la génération du token :", err);
+    res.status(500).send("Erreur serveur lors de la génération du token.");
+  }
 });
 
-// 🔸 TwiML App : instructions vocales quand l’appel est lancé
+// ✅ Endpoint WebRTC bridge TwiML (appel vers le client réel)
 app.post('/voice', (req, res) => {
-  const VoiceResponse = twilio.twiml.VoiceResponse;
-  const twiml = new VoiceResponse();
-
   const clientPhone = req.body.To || req.query.To;
 
+  const twiml = new twilio.twiml.VoiceResponse();
   if (clientPhone) {
     const dial = twiml.dial();
     dial.number(clientPhone);
   } else {
-    twiml.say('Aucun numéro de client fourni.');
+    twiml.say("Désolé, aucun numéro n'a été fourni.");
   }
 
   res.type('text/xml');
   res.send(twiml.toString());
 });
 
-// 🔸 (Optionnel) Ancien endpoint pour les appels backend
+// ✅ (optionnel) Ancien système pour lancer un appel depuis backend
 app.post('/click-to-call', async (req, res) => {
   const { employeeEmail, clientPhone } = req.body;
 
@@ -89,16 +95,17 @@ app.post('/click-to-call', async (req, res) => {
 
     res.send('Appel lancé avec succès.');
   } catch (err) {
-    console.error(err);
+    console.error("Erreur lors de l'appel Twilio :", err);
     res.status(500).send(err.message);
   }
 });
 
-// ▶️ Démarrage du serveur
+// ✅ Démarrage du serveur
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`🚀 Serveur en écoute sur http://localhost:${PORT}`);
 });
+
 
 /* require('dotenv').config();
 const express = require('express');
