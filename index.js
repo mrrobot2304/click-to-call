@@ -59,15 +59,20 @@ app.get('/token', (req, res) => {
 
 // ✅ Endpoint WebRTC bridge TwiML (appel vers le client réel)
 app.post('/voice', (req, res) => {
-  const clientPhone = req.body.To || req.query.To;
+  const clientPhone = req.query.To || req.body?.To;
+
+  console.log("📞 Appel reçu sur /voice avec :", {
+    query: req.query,
+    body: req.body
+  });
+
+  if (!clientPhone) {
+    console.error("❌ Numéro de client manquant");
+    return res.status(400).send('Client phone manquant');
+  }
 
   const twiml = new twilio.twiml.VoiceResponse();
-  if (clientPhone) {
-    const dial = twiml.dial();
-    dial.number(clientPhone);
-  } else {
-    twiml.say("Désolé, aucun numéro n'a été fourni.");
-  }
+  twiml.dial(clientPhone);
 
   res.type('text/xml');
   res.send(twiml.toString());
