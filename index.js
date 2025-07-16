@@ -3,6 +3,121 @@ const express = require('express');
 const bodyParser = require('body-parser');
 const path = require('path');
 const twilio = require('twilio');
+const cors = require('cors');
+
+const app = express();
+
+// 🛡️ Middlewares
+app.use(cors());
+app.use(bodyParser.json()); // Pour application/json
+app.use(bodyParser.urlencoded({ extended: false })); // Pour x-www-form-urlencoded (Twilio)
+
+// 📁 Fichiers statiques
+app.use(express.static(path.join(__dirname)));
+
+// 🔐 Initialiser Twilio client
+const client = twilio(
+  process.env.TWILIO_ACCOUNT_SID,
+  process.env.TWILIO_AUTH_TOKEN
+);
+
+// 📒 Mapping des utilisateurs HubSpot → numéros Twilio
+const employeeTwilioMap = {
+  "janice@glive.ca": "+14506001665",
+  // "sandra@tonentreprise.com": "+14155552672",
+};
+
+// ✅ Page d’accueil
+app.get('/', (req, res) => {
+  res.send('API Click-to-Call is running. Use POST /click-to-call or /token to use.');
+});
+
+// 🔐 Endpoint pour générer le token JWT Twilio Client
+app.get('/token', (req, res) => {
+  const email = req.query.email;
+  const callerId = employeeTwilioMap[email?.toLowerCase()];
+
+  if (!callerId) {
+    return res.status(403).json({ error: "Aucun numéro Twilio associé à cet utilisateur." });
+  }
+
+  const AccessToken = twilio.jwt.AccessToken;
+  const VoiceGrant = AccessToken.VoiceGrant;
+
+  const token = new AccessToken(
+    process.env.TWILIO_ACCOUNT_SID,
+    process.env.TWILIO_API_KEY,
+    process.env.TWILIO_API_SECRET,
+    { identity: email }
+  );
+
+  token.addGrant(new VoiceGrant({
+    outgoingApplicationSid: process.env.TWIML_APP_SID,
+    incomingAllow: true
+  }));
+
+  console.log("🎫 Token généré pour :", email);
+  res.json({ token: token.toJwt() });
+});
+
+// 📞 Endpoint pour initier un appel Click-to-Call
+app.post('/click-to-call', async (req, res) => {
+  const { employeeEmail, clientPhone } = req.body;
+
+  if (!employeeEmail || !clientPhone) {
+    return res.status(400).send('Paramètres manquants.');
+  }
+
+  const employeeTwilioNumber = employeeTwilioMap[employeeEmail.toLowerCase()];
+  if (!employeeTwilioNumber) {
+    return res.status(403).send('Aucun numéro Twilio associé à cet utilisateur.');
+  }
+
+  try {
+    await client.calls.create({
+      to: employeeTwilioNumber,
+      from: employeeTwilioNumber,
+      url: `${process.env.TWIML_BRIDGE_URL}?clientPhone=${encodeURIComponent(clientPhone)}`
+    });
+
+    res.send('Appel lancé avec succès.');
+  } catch (err) {
+    console.error('❌ Erreur Twilio.createCall :', err);
+    res.status(500).send(err.message);
+  }
+});
+
+// 📞 Endpoint que Twilio appelle (via TWIML App) pour diriger l’appel
+app.post('/voice', (req, res) => {
+  const clientPhone = req.body?.To;
+
+  console.log("📞 Appel reçu sur /voice avec :", { body: req.body });
+
+  if (!clientPhone) {
+    console.error("❌ Numéro de client manquant");
+    return res.status(400).send('Client phone manquant');
+  }
+
+  const twiml = new twilio.twiml.VoiceResponse();
+  twiml.dial(clientPhone);
+
+  console.log("✅ Réponse TwiML envoyée :", twiml.toString());
+
+  res.type('text/xml');
+  res.send(twiml.toString());
+});
+
+// 🚀 Lancer le serveur
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => {
+  console.log(`✅ Serveur en écoute sur http://localhost:${PORT}`);
+});
+
+/* require('dotenv').config();
+const express = require('express');
+const bodyParser = require('body-parser');
+const path = require('path');
+const twilio = require('twilio');
 const cors = require('cors'); // ✅ Import du middleware CORS
 
 // Twilio JWT AccessToken
@@ -109,7 +224,7 @@ app.post('/click-to-call', async (req, res) => {
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`🚀 Serveur en écoute sur http://localhost:${PORT}`);
-});
+}); */
 
 
 /* require('dotenv').config();
