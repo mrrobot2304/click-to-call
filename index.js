@@ -90,22 +90,26 @@ app.post('/click-to-call', async (req, res) => {
 // 📞 Endpoint que Twilio appelle (via TWIML App) pour diriger l’appel
 app.post('/voice', (req, res) => {
   const clientPhone = req.body?.To;
+  const identity = req.body?.From?.replace('client:', '').toLowerCase();
+  const callerId = employeeTwilioMap[identity];
 
   console.log("📞 Appel reçu sur /voice avec :", { body: req.body });
 
-  if (!clientPhone) {
-    console.error("❌ Numéro de client manquant");
-    return res.status(400).send('Client phone manquant');
+  if (!clientPhone || !callerId) {
+    console.error("❌ Numéro de client ou callerId manquant");
+    return res.status(400).send('Client phone ou CallerId manquant');
   }
 
   const twiml = new twilio.twiml.VoiceResponse();
-  twiml.dial(clientPhone);
+  const dial = twiml.dial({ callerId });
+  dial.number(clientPhone);
 
   console.log("✅ Réponse TwiML envoyée :", twiml.toString());
 
   res.type('text/xml');
   res.send(twiml.toString());
 });
+
 
 // 🚀 Lancer le serveur
 const PORT = process.env.PORT || 3000;
