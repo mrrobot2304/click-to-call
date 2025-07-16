@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Appel Serge Atta</title>
+  <style>
+    body {
+      margin: 0;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background-color: #f8f8f8;
+    }
+
+    .top-bar {
+      background-color: #426a8b;
+      color: white;
+      padding: 10px 20px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+
+    .caller-info {
+      display: flex;
+      flex-direction: column;
+    }
+
+    .caller-info strong {
+      font-size: 16px;
+    }
+
+    .call-actions {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .hangup-button {
+      background-color: #d9534f;
+      border: none;
+      color: white;
+      padding: 10px 16px;
+      font-size: 16px;
+      border-radius: 6px;
+      cursor: pointer;
+    }
+
+    .icons-bar {
+      background-color: white;
+      padding: 10px 20px;
+      display: flex;
+      justify-content: space-around;
+      border-bottom: 1px solid #ddd;
+      flex-wrap: wrap;
+    }
+
+    .icon {
+      text-align: center;
+      font-size: 14px;
+      cursor: pointer;
+      padding: 10px;
+      border-radius: 5px;
+      transition: background 0.2s;
+    }
+
+    .icon.active {
+      background-color: #e0f0ff;
+    }
+
+    .icon img {
+      width: 24px;
+      height: 24px;
+      margin-bottom: 5px;
+    }
+
+    .notes-section {
+      padding: 20px;
+    }
+
+    .notes-section h3 {
+      margin-bottom: 5px;
+      color: #333;
+    }
+
+    .notes-input {
+      width: 100%;
+      height: 150px;
+      border: none;
+      border-bottom: 1px solid #ccc;
+      resize: none;
+      font-size: 14px;
+      padding: 10px;
+      box-sizing: border-box;
+    }
+
+    .toolbar {
+      display: flex;
+      align-items: center;
+      gap: 15px;
+      padding: 10px 20px;
+      background: #fff;
+      border-top: 1px solid #eee;
+      flex-wrap: wrap;
+    }
+
+    .toolbar span {
+      cursor: pointer;
+      color: #333;
+      font-size: 14px;
+    }
+
+    .toolbar .more {
+      color: #0a90c8;
+    }
+
+    /* Responsive */
+    @media (max-width: 600px) {
+      .top-bar, .icons-bar, .toolbar {
+        flex-direction: column;
+        align-items: flex-start;
+      }
+
+      .call-actions {
+        margin-top: 10px;
+      }
+
+      .icon {
+        width: 45%;
+        margin-bottom: 10px;
+      }
+    }
+
+    .disabled {
+      pointer-events: none;
+      opacity: 0.5;
+    }
+
+    .recording-indicator {
+      font-size: 12px;
+      color: red;
+      text-align: center;
+      margin-top: -8px;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="top-bar">
+    <div class="caller-info">
+      <strong>Serge Atta</strong>
+      <small>+1 (579) 999-2354</small>
+    </div>
+    <div class="call-actions">
+      <span id="call-timer">0:01</span>
+      <button class="hangup-button" id="hangup-btn">📞</button>
+    </div>
+  </div>
+
+  <div class="icons-bar" id="icons-bar">
+    <div class="icon" id="record-btn">
+      <img id="record-icon" src="https://img.icons8.com/ios-filled/50/000000/record.png" alt="Enregistrer">
+      <div>Enregistrer</div>
+      <div class="recording-indicator" id="recording-status" style="display: none;">● Enregistrement</div>
+    </div>
+    <div class="icon" id="mute-btn">
+      <img src="https://img.icons8.com/ios-filled/50/000000/mute.png" alt="Muet">
+      <div>Muet</div>
+    </div>
+    <div class="icon">
+      <img src="https://img.icons8.com/ios-filled/50/000000/dialpad.png" alt="Clavier">
+      <div>Clavier</div>
+    </div>
+    <div class="icon">
+      <img src="https://img.icons8.com/ios-glyphs/30/000000/rocket--v1.png" alt="Copilot">
+      <div>Breeze Copilot</div>
+    </div>
+    <div class="icon">
+      <img src="https://img.icons8.com/ios-glyphs/30/000000/headphones.png" alt="Audio">
+      <div>Audio</div>
+    </div>
+    <div class="icon">
+      <img src="https://img.icons8.com/ios-glyphs/30/000000/network.png" alt="Réseau">
+      <div>Réseau</div>
+    </div>
+  </div>
+
+  <div class="notes-section">
+    <h3>Notes</h3>
+    <textarea class="notes-input" id="notes-area" placeholder="Prendre des notes sur cet appel..."></textarea>
+  </div>
+
+  <div class="toolbar">
+    <span><b>B</b></span>
+    <span><i>I</i></span>
+    <span><u>U</u></span>
+    <span><s>X</s></span>
+    <span class="more">Plus ▼</span>
+    <span>📝</span>
+    <span>☰</span>
+  </div>
+
+  <script>
+    const hangupBtn = document.getElementById("hangup-btn");
+    const muteBtn = document.getElementById("mute-btn");
+    const recordBtn = document.getElementById("record-btn");
+    const recordingStatus = document.getElementById("recording-status");
+    const recordIcon = document.getElementById("record-icon");
+    const notesArea = document.getElementById("notes-area");
+    const callTimer = document.getElementById("call-timer");
+
+    let seconds = 1;
+    let recording = false;
+    let recordInterval = null;
+
+    // Timer
+    setInterval(() => {
+      if (!document.body.classList.contains("disabled")) {
+        seconds++;
+        const mins = Math.floor(seconds / 60);
+        const secs = seconds % 60;
+        callTimer.textContent = `${mins}:${secs.toString().padStart(2, "0")}`;
+      }
+    }, 1000);
+
+    // Raccrocher
+    hangupBtn.addEventListener("click", () => {
+      alert("Appel terminé.");
+      document.body.classList.add("disabled");
+      stopRecording();
+    });
+
+    // Mute toggle
+    muteBtn.addEventListener("click", () => {
+      muteBtn.classList.toggle("active");
+    });
+
+    // Enregistrement simulé
+    recordBtn.addEventListener("click", () => {
+      recording = !recording;
+      recordBtn.classList.toggle("active");
+      if (recording) {
+        startRecording();
+      } else {
+        stopRecording();
+      }
+    });
+
+    function startRecording() {
+      recordingStatus.style.display = "block";
+      recordIcon.src = "https://img.icons8.com/ios-filled/50/fa314a/record.png";
+      let dot = true;
+      recordInterval = setInterval(() => {
+        recordingStatus.textContent = dot ? "● Enregistrement" : "  Enregistrement";
+        dot = !dot;
+      }, 600);
+    }
+
+    function stopRecording() {
+      clearInterval(recordInterval);
+      recordingStatus.style.display = "none";
+      recordIcon.src = "https://img.icons8.com/ios-filled/50/000000/record.png";
+    }
+
+    // Sauvegarde auto des notes
+    notesArea.value = localStorage.getItem("callNotes") || "";
+
+    notesArea.addEventListener("input", () => {
+      localStorage.setItem("callNotes", notesArea.value);
+    });
+  </script>
+
+</body>
+</html>
