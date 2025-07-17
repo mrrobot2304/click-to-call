@@ -101,7 +101,13 @@ app.post('/voice', (req, res) => {
   }
 
   const twiml = new twilio.twiml.VoiceResponse();
-  const dial = twiml.dial({ callerId });
+  const dial = twiml.dial({ 
+    callerId, 
+    record: 'record-from-answer-dual',
+    recordingStatusCallback: 'https://click-to-call-app.onrender.com/recording-callback',
+    recordingStatusCallbackEvent: ['completed'],
+  });
+
   dial.number(clientPhone);
 
   console.log("✅ Réponse TwiML envoyée :", twiml.toString());
@@ -109,6 +115,28 @@ app.post('/voice', (req, res) => {
   res.type('text/xml');
   res.send(twiml.toString());
 });
+
+app.post('/recording-callback', (req, res) => {
+  const {
+    CallSid,
+    RecordingSid,
+    RecordingUrl,
+    RecordingDuration,
+  } = req.body;
+
+  const recordingMp3Url = `${RecordingUrl}.mp3`;
+
+  console.log("✅ Enregistrement reçu :", {
+    CallSid,
+    RecordingSid,
+    RecordingDuration,
+    recordingMp3Url,
+  });
+
+  res.sendStatus(200);
+});
+
+
 
 
 // 🚀 Lancer le serveur
