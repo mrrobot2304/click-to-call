@@ -8,12 +8,21 @@ const cors = require('cors');
 const app = express();
 
 // 🛡️ Middlewares
-app.use(cors());
+const allowedOrigins = ['https://app.hubspot.com', 'https://click-to-call-app.onrender.com']; // ← adapte ici
+app.use(cors({
+  origin: function (origin, callback) {
+    if (!origin || allowedOrigins.includes(origin)) {
+      return callback(null, true);
+    } else {
+      return callback(new Error('CORS non autorisé : ' + origin));
+    }
+  }
+}));
+
 app.use(bodyParser.json()); // Pour application/json
 app.use(bodyParser.urlencoded({ extended: false })); // Pour x-www-form-urlencoded (Twilio)
 
-// 📁 Fichiers statiques
-app.use(express.static(path.join(__dirname)));
+
 
 // 🔐 Initialiser Twilio client
 const client = twilio(
@@ -34,11 +43,11 @@ app.get('/', (req, res) => {
 
 // 🔐 Endpoint pour générer le token JWT Twilio Client
 app.get('/token', (req, res) => {
-  const email = req.query.email;
-  const callerId = employeeTwilioMap[email?.toLowerCase()];
+  const email = req.query.email?.toLowerCase();
+  const callerId = employeeTwilioMap[email];
 
   if (!callerId) {
-    return res.status(403).json({ error: "Aucun numéro Twilio associé à cet utilisateur." });
+    return res.status(403).json({ error: "Utilisateur non autorisé" });
   }
 
   const AccessToken = twilio.jwt.AccessToken;
@@ -56,9 +65,9 @@ app.get('/token', (req, res) => {
     incomingAllow: true
   }));
 
-  console.log("🎫 Token généré pour :", email);
   res.json({ token: token.toJwt() });
 });
+
 
 // 📞 Endpoint pour initier un appel Click-to-Call
 app.post('/click-to-call', async (req, res) => {
