@@ -98,39 +98,48 @@ app.post('/click-to-call', async (req, res) => {
 
 // 📞 Endpoint unique pour appels sortants et entrants
 app.post('/voice', (req, res) => {
-  const to = req.body?.To;
-  const from = req.body?.From;
-  const isIncoming = to?.startsWith('client:');
-  const identity = isIncoming ? to.replace('client:', '').toLowerCase() : from?.replace('client:', '').toLowerCase();
+  const from = req.body.From;
+  const to = req.body.To;
+
+  console.log("📞 Appel reçu sur /voice :", req.body);
+
+  const identity = from?.startsWith('client:') ? from.replace('client:', '').toLowerCase() : null;
   const callerId = employeeTwilioMap[identity];
 
-  console.log("📞 Appel reçu sur /voice avec :", { to, from, isIncoming });
-
-  if (!to) {
-    console.error("❌ Champ 'To' manquant");
-    return res.status(400).send('Champ "To" manquant');
-  }
-
   const twiml = new twilio.twiml.VoiceResponse();
-  const dial = twiml.dial({
-    callerId: callerId || from, // Si sortant : callerId = TwilioUser ; entrant : callerId = numéro externe
+  const dialOptions = {
     record: 'record-from-answer-dual',
     recordingStatusCallback: 'https://click-to-call-app.onrender.com/recording-callback',
-    recordingStatusCallbackEvent: ['completed'],
-  });
+    recordingStatusCallbackEvent: ['completed']
+  };
 
-  if (isIncoming) {
-    const targetClient = to.replace('client:', '').toLowerCase();
-    dial.client(targetClient);
-    console.log("📥 Appel entrant routé vers client :", targetClient);
-  } else {
+  if (callerId && to) {
+    // Appel sortant (depuis extension vers client)
+    dialOptions.callerId = callerId;
+    const dial = twiml.dial(dialOptions);
     dial.number(to);
-    console.log("📤 Appel sortant vers numéro :", to);
+    console.log("🔄 Appel sortant vers numéro :", to);
+  } else {
+    // Appel entrant : rediriger vers un employé Twilio Client (ex: janice@glive.ca)
+    // Ici, on suppose que le numéro Twilio appelé est associé à un agent
+    const calledNumber = to;
+    const employeeEntry = Object.entries(employeeTwilioMap).find(([_, num]) => num === calledNumber);
+
+    if (!employeeEntry) {
+      console.error("❌ Aucun employé trouvé pour ce numéro Twilio :", calledNumber);
+      return res.status(400).send('Aucun employé trouvé pour ce numéro Twilio');
+    }
+
+    const targetIdentity = employeeEntry[0]; // email ex: janice@glive.ca
+    const dial = twiml.dial(dialOptions);
+    dial.client(targetIdentity);
+    console.log("📥 Appel entrant redirigé vers client :", targetIdentity);
   }
 
-  console.log("✅ Réponse TwiML envoyée :", twiml.toString());
-  res.type('text/xml').send(twiml.toString());
+  res.type('text/xml');
+  res.send(twiml.toString());
 });
+
 
 
 
