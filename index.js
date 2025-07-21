@@ -98,6 +98,45 @@ app.post('/click-to-call', async (req, res) => {
 
 // 📞 Endpoint que Twilio appelle (via TWIML App) pour diriger l’appel
 app.post('/voice', (req, res) => {
+  const to = req.body?.To;
+  const from = req.body?.From;
+  const identity = from?.startsWith('client:') ? from.replace('client:', '').toLowerCase() : null;
+  const callerId = employeeTwilioMap[identity];
+
+  console.log("📞 Appel reçu sur /voice avec :", { body: req.body });
+
+  const twiml = new twilio.twiml.VoiceResponse();
+
+  if (!to) {
+    console.error("❌ Numéro de destination manquant");
+    return res.status(400).send('Champ To manquant');
+  }
+
+  const dial = twiml.dial({ 
+    callerId: callerId || from, // fallback à "from" pour appels entrants
+    record: 'record-from-answer-dual',
+    recordingStatusCallback: 'https://click-to-call-app.onrender.com/recording-callback',
+    recordingStatusCallbackEvent: ['completed'],
+  });
+
+  if (to.startsWith('client:')) {
+    const targetClient = to.replace('client:', '').toLowerCase();
+    dial.client(targetClient);
+    console.log("📥 Appel entrant routé vers le client Twilio :", targetClient);
+  } else {
+    dial.number(to);
+    console.log("📤 Appel sortant vers numéro :", to);
+  }
+
+  console.log("✅ Réponse TwiML envoyée :", twiml.toString());
+
+  res.type('text/xml');
+  res.send(twiml.toString());
+});
+
+
+// 📞 Ancien Endpoint que Twilio appelle (via TWIML App) pour diriger l’appel
+/* app.post('/voice', (req, res) => {
   const clientPhone = req.body?.To;
   const identity = req.body?.From?.replace('client:', '').toLowerCase();
   const callerId = employeeTwilioMap[identity];
@@ -123,7 +162,7 @@ app.post('/voice', (req, res) => {
 
   res.type('text/xml');
   res.send(twiml.toString());
-});
+}); */
 
 app.post('/recording-callback', (req, res) => {
   const {
