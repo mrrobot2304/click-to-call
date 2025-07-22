@@ -192,7 +192,10 @@ app.post('/recording-callback', (req, res) => {
   res.sendStatus(200);
 });
 
-
+// Route de ping pour empêcher Render de mettre en veille l'app
+app.get('/ping', (req, res) => {
+  res.status(200).send('pong');
+});
 
 
 // 🚀 Lancer le serveur
