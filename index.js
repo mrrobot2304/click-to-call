@@ -141,37 +141,6 @@ app.post('/voice', (req, res) => {
 });
 
 
-
-
-// 📞 Ancien Endpoint que Twilio appelle (via TWIML App) pour diriger l’appel
-/* app.post('/voice', (req, res) => {
-  const clientPhone = req.body?.To;
-  const identity = req.body?.From?.replace('client:', '').toLowerCase();
-  const callerId = employeeTwilioMap[identity];
-
-  console.log("📞 Appel reçu sur /voice avec :", { body: req.body });
-
-  if (!clientPhone || !callerId) {
-    console.error("❌ Numéro de client ou callerId manquant");
-    return res.status(400).send('Client phone ou CallerId manquant');
-  }
-
-  const twiml = new twilio.twiml.VoiceResponse();
-  const dial = twiml.dial({ 
-    callerId, 
-    record: 'record-from-answer-dual',
-    recordingStatusCallback: 'https://click-to-call-app.onrender.com/recording-callback',
-    recordingStatusCallbackEvent: ['completed'],
-  });
-
-  dial.number(clientPhone);
-
-  console.log("✅ Réponse TwiML envoyée :", twiml.toString());
-
-  res.type('text/xml');
-  res.send(twiml.toString());
-}); */
-
 app.post('/recording-callback', (req, res) => {
   const {
     CallSid,
@@ -191,6 +160,46 @@ app.post('/recording-callback', (req, res) => {
 
   res.sendStatus(200);
 });
+
+app.post('/log-call', async (req, res) => {
+  const { email, phoneNumber, duration, contactId, clientName, recordingUrl } = req.body;
+
+  if (!email || !phoneNumber || !contactId) {
+    return res.status(400).json({ error: 'Champs requis manquants.' });
+  }
+
+  try {
+    await axios.post('https://api.hubapi.com/engagements/v1/engagements', {
+      engagement: {
+        active: true,
+        type: 'CALL',
+        timestamp: Date.now()
+      },
+      associations: {
+        contactIds: [parseInt(contactId)]
+      },
+      metadata: {
+        toNumber: phoneNumber,
+        fromNumber: employeeTwilioMap[email],
+        status: 'COMPLETED',
+        durationMilliseconds: duration * 1000,
+        externalAccountId: 'twilio',
+        recordingUrl: recordingUrl || ''
+      }
+    }, {
+      headers: {
+        'Authorization': `Bearer ${process.env.HUBSPOT_API_KEY}`,
+        'Content-Type': 'application/json'
+      }
+    });
+
+    res.status(200).json({ success: true });
+  } catch (err) {
+    console.error('Erreur API HubSpot :', err.response?.data || err.message);
+    res.status(500).json({ error: 'Erreur API HubSpot' });
+  }
+});
+
 
 // Route de ping pour empêcher Render de mettre en veille l'app
 app.get('/ping', (req, res) => {
