@@ -4,7 +4,7 @@ const bodyParser = require('body-parser');
 const path = require('path');
 const twilio = require('twilio');
 const cors = require('cors');
-const axios = require('axios');
+
 const app = express();
 
 // 🛡️ Middlewares
@@ -69,32 +69,6 @@ app.get('/token', (req, res) => {
 });
 
 
-// 📞 Endpoint pour initier un appel Click-to-Call
-app.post('/click-to-call', async (req, res) => {
-  const { employeeEmail, clientPhone } = req.body;
-
-  if (!employeeEmail || !clientPhone) {
-    return res.status(400).send('Paramètres manquants.');
-  }
-
-  const employeeTwilioNumber = employeeTwilioMap[employeeEmail.toLowerCase()];
-  if (!employeeTwilioNumber) {
-    return res.status(403).send('Aucun numéro Twilio associé à cet utilisateur.');
-  }
-
-  try {
-    await client.calls.create({
-      to: employeeTwilioNumber,
-      from: employeeTwilioNumber,
-      url: `${process.env.TWIML_BRIDGE_URL}?clientPhone=${encodeURIComponent(clientPhone)}`
-    });
-
-    res.send('Appel lancé avec succès.');
-  } catch (err) {
-    console.error('❌ Erreur Twilio.createCall :', err);
-    res.status(500).send(err.message);
-  }
-});
 
 // 📞 Endpoint unique pour appels sortants et entrants
 app.post('/voice', (req, res) => {
@@ -161,50 +135,6 @@ app.post('/recording-callback', (req, res) => {
   res.sendStatus(200);
 });
 
-// 📝 Endpoint pour enregistrer une "Note" dans la fiche client HubSpot
-app.post('/log-call', async (req, res) => {
-  const { email, phoneNumber, duration, contactId, clientName } = req.body;
-
-  if (!email || !phoneNumber || !contactId) {
-    return res.status(400).json({ error: 'Champs requis manquants.' });
-  }
-
-  try {
-    const engagementPayload = {
-      engagement: {
-        active: true,
-        type: "NOTE", // ← On utilise NOTE comme fallback
-        timestamp: Date.now()
-      },
-      associations: {
-        contactIds: [parseInt(contactId)]
-      },
-      metadata: {
-        body: `📞 Appel avec ${clientName || 'Client inconnu'} (${phoneNumber})\nDurée estimée : ${duration || 0} secondes`
-      }
-    };
-
-    const response = await axios.post(
-      'https://api.hubapi.com/engagements/v1/engagements',
-      engagementPayload,
-      {
-        headers: {
-          Authorization: `Bearer ${process.env.HUBSPOT_API_KEY}`,
-          'Content-Type': 'application/json'
-        }
-      }
-    );
-
-    console.log('✅ Note créée dans HubSpot pour le contact ID', contactId);
-    res.status(200).json({ success: true });
-  } catch (err) {
-    console.error('❌ Erreur API HubSpot (log-call) :', err.response?.data || err.message);
-    res.status(500).json({ error: 'Erreur API HubSpot' });
-  }
-});
-
-
-
 // Route de ping pour empêcher Render de mettre en veille l'app
 app.get('/ping', (req, res) => {
   res.status(200).send('pong');
@@ -216,4 +146,3 @@ const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`✅ Serveur en écoute sur http://localhost:${PORT}`);
 });
-
