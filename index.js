@@ -161,44 +161,48 @@ app.post('/recording-callback', (req, res) => {
   res.sendStatus(200);
 });
 
+// 📝 Endpoint pour enregistrer une "Note" dans la fiche client HubSpot
 app.post('/log-call', async (req, res) => {
-  const { email, phoneNumber, duration, contactId, clientName, recordingUrl } = req.body;
+  const { email, phoneNumber, duration, contactId, clientName } = req.body;
 
   if (!email || !phoneNumber || !contactId) {
     return res.status(400).json({ error: 'Champs requis manquants.' });
   }
 
   try {
-    await axios.post('https://api.hubapi.com/engagements/v1/engagements', {
+    const engagementPayload = {
       engagement: {
         active: true,
-        type: 'CALL',
+        type: "NOTE", // ← On utilise NOTE comme fallback
         timestamp: Date.now()
       },
       associations: {
         contactIds: [parseInt(contactId)]
       },
       metadata: {
-        toNumber: phoneNumber,
-        fromNumber: employeeTwilioMap[email],
-        status: 'COMPLETED',
-        durationMilliseconds: duration * 1000,
-        externalAccountId: 'twilio',
-        recordingUrl: recordingUrl || ''
+        body: `📞 Appel avec ${clientName || 'Client inconnu'} (${phoneNumber})\nDurée estimée : ${duration || 0} secondes`
       }
-    }, {
-      headers: {
-        'Authorization': `Bearer ${process.env.HUBSPOT_API_KEY}`,
-        'Content-Type': 'application/json'
-      }
-    });
+    };
 
+    const response = await axios.post(
+      'https://api.hubapi.com/engagements/v1/engagements',
+      engagementPayload,
+      {
+        headers: {
+          Authorization: `Bearer ${process.env.HUBSPOT_API_KEY}`,
+          'Content-Type': 'application/json'
+        }
+      }
+    );
+
+    console.log('✅ Note créée dans HubSpot pour le contact ID', contactId);
     res.status(200).json({ success: true });
   } catch (err) {
-    console.error('Erreur API HubSpot :', err.response?.data || err.message);
+    console.error('❌ Erreur API HubSpot (log-call) :', err.response?.data || err.message);
     res.status(500).json({ error: 'Erreur API HubSpot' });
   }
 });
+
 
 
 // Route de ping pour empêcher Render de mettre en veille l'app
