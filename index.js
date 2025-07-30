@@ -141,6 +141,37 @@ app.post('/voice', (req, res) => {
 });
 
 
+
+
+// 📞 Ancien Endpoint que Twilio appelle (via TWIML App) pour diriger l’appel
+/* app.post('/voice', (req, res) => {
+  const clientPhone = req.body?.To;
+  const identity = req.body?.From?.replace('client:', '').toLowerCase();
+  const callerId = employeeTwilioMap[identity];
+
+  console.log("📞 Appel reçu sur /voice avec :", { body: req.body });
+
+  if (!clientPhone || !callerId) {
+    console.error("❌ Numéro de client ou callerId manquant");
+    return res.status(400).send('Client phone ou CallerId manquant');
+  }
+
+  const twiml = new twilio.twiml.VoiceResponse();
+  const dial = twiml.dial({ 
+    callerId, 
+    record: 'record-from-answer-dual',
+    recordingStatusCallback: 'https://click-to-call-app.onrender.com/recording-callback',
+    recordingStatusCallbackEvent: ['completed'],
+  });
+
+  dial.number(clientPhone);
+
+  console.log("✅ Réponse TwiML envoyée :", twiml.toString());
+
+  res.type('text/xml');
+  res.send(twiml.toString());
+}); */
+
 app.post('/recording-callback', (req, res) => {
   const {
     CallSid,
@@ -172,3 +203,4 @@ const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`✅ Serveur en écoute sur http://localhost:${PORT}`);
 });
+
