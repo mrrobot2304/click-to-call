@@ -69,6 +69,32 @@ app.get('/token', (req, res) => {
 });
 
 
+// 📞 Endpoint pour initier un appel Click-to-Call
+app.post('/click-to-call', async (req, res) => {
+  const { employeeEmail, clientPhone } = req.body;
+
+  if (!employeeEmail || !clientPhone) {
+    return res.status(400).send('Paramètres manquants.');
+  }
+
+  const employeeTwilioNumber = employeeTwilioMap[employeeEmail.toLowerCase()];
+  if (!employeeTwilioNumber) {
+    return res.status(403).send('Aucun numéro Twilio associé à cet utilisateur.');
+  }
+
+  try {
+    await client.calls.create({
+      to: employeeTwilioNumber,
+      from: employeeTwilioNumber,
+      url: `${process.env.TWIML_BRIDGE_URL}?clientPhone=${encodeURIComponent(clientPhone)}`
+    });
+
+    res.send('Appel lancé avec succès.');
+  } catch (err) {
+    console.error('❌ Erreur Twilio.createCall :', err);
+    res.status(500).send(err.message);
+  }
+});
 
 // 📞 Endpoint unique pour appels sortants et entrants
 app.post('/voice', (req, res) => {
