@@ -162,7 +162,6 @@ app.post('/voice', (req, res) => {
       callerId: employeeTwilioMap[identity],
       record: 'record-from-answer-dual',
       statusCallback: `${serverUrl}/call-status`,
-      statusCallbackEvent: ['completed'],
       statusCallbackMethod: 'POST',
     };
 
