@@ -4,6 +4,7 @@ const bodyParser = require('body-parser');
 const path = require('path');
 const twilio = require('twilio');
 const cors = require('cors');
+const { Client } = require('@hubspot/api-client'); // ← NOUVEAU : Import du client HubSpot
 
 const app = express();
 
@@ -30,11 +31,87 @@ const client = twilio(
   process.env.TWILIO_AUTH_TOKEN
 );
 
+// ✨ NOUVEAU : Initialiser HubSpot client
+const hubspotClient = new Client({ accessToken: process.env.HUBSPOT_API_KEY });
+
 // 📒 Mapping des utilisateurs HubSpot → numéros Twilio
 const employeeTwilioMap = {
   "janice@glive.ca": "+14506001665",
   // "sandra@tonentreprise.com": "+14155552672",
 };
+
+// --- ✨ NOUVEAU : FONCTIONS HELPERS HUBSPOT ---
+
+/**
+ * Recherche un contact dans HubSpot à partir de son numéro de téléphone.
+ * @param {string} phoneNumber Le numéro de téléphone du contact.
+ * @returns {string|null} L'ID du contact HubSpot ou null si non trouvé.
+ */
+async function findContactByPhoneNumber(phoneNumber) {
+  try {
+    const searchRequest = {
+      filterGroups: [{ filters: [{ propertyName: 'phone', operator: 'EQ', value: phoneNumber }] }],
+      properties: ['firstname', 'lastname'],
+      limit: 1,
+    };
+    const response = await hubspotClient.crm.contacts.searchApi.doSearch(searchRequest);
+    if (response.results.length > 0) {
+      console.log(`👤 Contact HubSpot trouvé pour ${phoneNumber}: ID ${response.results[0].id}`);
+      return response.results[0].id;
+    }
+    console.log(`🤷 Aucun contact HubSpot trouvé pour le numéro ${phoneNumber}`);
+    return null;
+  } catch (error) {
+    console.error("❌ Erreur lors de la recherche du contact HubSpot:", error);
+    return null;
+  }
+}
+
+/**
+ * Crée un engagement d'appel sur la fiche d'un contact HubSpot.
+ * @param {string} contactId L'ID du contact HubSpot.
+ * @param {object} callData Les données de l'appel fournies par Twilio.
+ */
+async function logCallInHubspot(contactId, callData) {
+  if (!contactId) {
+    console.log("🚫 ID de contact manquant, impossible de journaliser l'appel.");
+    return;
+  }
+
+  try {
+    const callDirection = callData.Direction.includes('inbound') ? 'entrant' : 'sortant';
+    const bodyContent = `
+      Détails de l'appel Twilio :<br>
+      - **Direction** : ${callDirection.charAt(0).toUpperCase() + callDirection.slice(1)}<br>
+      - **Depuis** : ${callData.From}<br>
+      - **Vers** : ${callData.To}<br>
+      - **Durée** : ${callData.CallDuration || '0'} secondes<br>
+      - **Statut** : ${callData.CallStatus}<br>
+      ${callData.RecordingUrl ? `- **Enregistrement** : <a href="${callData.RecordingUrl}.mp3" target="_blank">Écouter l'enregistrement</a>` : ''}
+    `.trim().replace(/ /g, ' ');
+
+    const engagementBody = {
+      engagement: { type: 'CALL' },
+      associations: { contactIds: [contactId] },
+      metadata: {
+        body: bodyContent,
+        status: 'COMPLETED',
+        durationMilliseconds: parseInt(callData.CallDuration || '0', 10) * 1000,
+        fromNumber: callData.From,
+        toNumber: callData.To,
+        callDirection: callDirection.toUpperCase(),
+      },
+    };
+    
+    // Si vous avez un `ownerId` (commercial assigné), vous pouvez l'ajouter ici
+    // engagementBody.engagement.ownerId = 'ID_DU_PROPRIETAIRE';
+
+    const response = await hubspotClient.crm.objects.engagements.create(engagementBody);
+    console.log(`✅ Appel journalisé sur HubSpot pour le contact ${contactId}. Engagement ID: ${response.id}`);
+  } catch (error) {
+    console.error("❌ Erreur lors de la journalisation de l'appel sur HubSpot:", error.body || error);
+  }
+}
 
 // ✅ Page d’accueil
 app.get('/', (req, res) => {
@@ -96,81 +173,79 @@ app.post('/click-to-call', async (req, res) => {
   }
 });
 
-// 📞 Endpoint unique pour appels sortants et entrants
+/**
+ * 📞 MODIFIÉ : Endpoint unique pour appels
+ * La logique principale est d'ajouter le `statusCallback` pour déclencher la journalisation à la fin de l'appel.
+ */
 app.post('/voice', (req, res) => {
-  const from = req.body.From;
-  const to = req.body.To;
-
+  const { From, To, contactId } = req.body; // ✨ On attend maintenant `contactId` depuis le front
   console.log("📞 Appel reçu sur /voice :", req.body);
 
-  const identity = from?.startsWith('client:') ? from.replace('client:', '').toLowerCase() : null;
-  const callerId = employeeTwilioMap[identity];
-
   const twiml = new twilio.twiml.VoiceResponse();
+
+  // URL du serveur pour construire le callback. Essentiel pour Render.
+  const serverUrl = `https://${req.get('host')}`;
+
+  // Options pour le <Dial>. On ajoute le statusCallback ici.
   const dialOptions = {
     record: 'record-from-answer-dual',
-    recordingStatusCallback: 'https://click-to-call-app.onrender.com/recording-callback',
-    recordingStatusCallbackEvent: ['completed']
+    // ✨ L'URL que Twilio appellera à la fin de l'appel
+    statusCallback: `${serverUrl}/call-status`,
+    statusCallbackEvent: ['completed'], // Uniquement à la fin
+    statusCallbackMethod: 'POST'
   };
 
-  if (callerId && to) {
-    // Appel sortant (depuis extension vers client)
-    dialOptions.callerId = callerId;
+  const isOutgoing = From?.startsWith('client:');
+  
+  if (isOutgoing) { // Appel sortant
+    const identity = From.replace('client:', '').toLowerCase();
+    dialOptions.callerId = employeeTwilioMap[identity];
+    if (contactId) { // ✨ On ajoute le contactId à l'URL de callback s'il existe
+      dialOptions.statusCallback += `?contactId=${contactId}`;
+    }
     const dial = twiml.dial(dialOptions);
-    dial.number(to);
-    console.log("🔄 Appel sortant vers numéro :", to);
-  } else {
-    // Appel entrant : rediriger vers un employé Twilio Client (ex: janice@glive.ca)
-    // Ici, on suppose que le numéro Twilio appelé est associé à un agent
-    const calledNumber = to;
+    dial.number(To);
+    console.log(`🔄 Appel sortant vers ${To} avec callback vers ${dialOptions.statusCallback}`);
+  } else { // Appel entrant
+    const calledNumber = To;
     const employeeEntry = Object.entries(employeeTwilioMap).find(([_, num]) => num === calledNumber);
-
     if (!employeeEntry) {
       console.error("❌ Aucun employé trouvé pour ce numéro Twilio :", calledNumber);
-      return res.status(400).send('Aucun employé trouvé pour ce numéro Twilio');
+      twiml.say({ language: 'fr-FR' }, 'Aucun agent disponible pour prendre cet appel.');
+    } else {
+      const targetIdentity = employeeEntry[0];
+      const dial = twiml.dial(dialOptions);
+      dial.client(targetIdentity);
+      console.log(`📥 Appel entrant de ${From} redirigé vers ${targetIdentity}`);
     }
-
-    const targetIdentity = employeeEntry[0]; // email ex: janice@glive.ca
-    const dial = twiml.dial(dialOptions);
-    dial.client(targetIdentity);
-    console.log("📥 Appel entrant redirigé vers client :", targetIdentity);
   }
 
   res.type('text/xml');
   res.send(twiml.toString());
 });
 
+/**
+ * ✨ NOUVEAU : Endpoint pour recevoir le statut final de l'appel
+ * et déclencher la journalisation dans HubSpot.
+ */
+app.post('/call-status', async (req, res) => {
+  const callData = req.body;
+  console.log('🏁 Appel terminé, statut reçu :', callData.CallStatus);
+  
+  // L'ID du contact peut venir du query parameter (sortant) ou on doit le chercher (entrant)
+  let contactId = req.query.contactId;
 
-
-
-// 📞 Ancien Endpoint que Twilio appelle (via TWIML App) pour diriger l’appel
-/* app.post('/voice', (req, res) => {
-  const clientPhone = req.body?.To;
-  const identity = req.body?.From?.replace('client:', '').toLowerCase();
-  const callerId = employeeTwilioMap[identity];
-
-  console.log("📞 Appel reçu sur /voice avec :", { body: req.body });
-
-  if (!clientPhone || !callerId) {
-    console.error("❌ Numéro de client ou callerId manquant");
-    return res.status(400).send('Client phone ou CallerId manquant');
+  if (!contactId && callData.Direction.includes('inbound')) {
+    const customerNumber = callData.From; // Le client est 'From' pour un appel entrant
+    contactId = await findContactByPhoneNumber(customerNumber);
   }
 
-  const twiml = new twilio.twiml.VoiceResponse();
-  const dial = twiml.dial({ 
-    callerId, 
-    record: 'record-from-answer-dual',
-    recordingStatusCallback: 'https://click-to-call-app.onrender.com/recording-callback',
-    recordingStatusCallbackEvent: ['completed'],
-  });
+  // Journalise l'appel dans HubSpot avec toutes les données
+  await logCallInHubspot(contactId, callData);
 
-  dial.number(clientPhone);
+  res.sendStatus(200); // Répond à Twilio que tout est OK
+});
 
-  console.log("✅ Réponse TwiML envoyée :", twiml.toString());
-
-  res.type('text/xml');
-  res.send(twiml.toString());
-}); */
 
 app.post('/recording-callback', (req, res) => {
   const {
