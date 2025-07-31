@@ -9,23 +9,14 @@ const { Client } = require('@hubspot/api-client'); // ← NOUVEAU : Import du cl
 const app = express();
 
 // 🛡️ Middlewares
-const allowedOrigins = ['https://app.hubspot.com']; // ← adapte ici
+const allowedOrigins = ['https://app.hubspot.com', 'https://click-to-call-app.onrender.com']; // ← adapte ici
 app.use(cors({
   origin: function (origin, callback) {
-    // Autoriser les requêtes sans origine (ex: Postman, curl)
-    if (!origin) {
+    if (!origin || allowedOrigins.includes(origin)) {
       return callback(null, true);
+    } else {
+      return callback(new Error('CORS non autorisé : ' + origin));
     }
-    // Autoriser les origines de la liste
-    if (allowedOrigins.includes(origin)) {
-      return callback(null, true);
-    }
-    // ✨ NOUVEAU : Autoriser TOUTES les extensions Chrome
-    if (origin.startsWith('chrome-extension://')) {
-      return callback(null, true);
-    }
-    // Sinon, refuser
-    return callback(new Error('CORS non autorisé pour cette origine : ' + origin));
   }
 }));
 
@@ -186,44 +177,61 @@ app.post('/click-to-call', async (req, res) => {
  * 📞 MODIFIÉ : Endpoint unique pour appels
  * La logique principale est d'ajouter le `statusCallback` pour déclencher la journalisation à la fin de l'appel.
  */
+/**
+ * ✅ CORRIGÉ : Endpoint unique pour appels
+ * La logique est améliorée pour identifier correctement les appels sortants
+ * même si le 'From' n'est pas 'client:...', en se basant sur la présence du 'contactId'.
+ */
 app.post('/voice', (req, res) => {
-  const { From, To, contactId } = req.body; // ✨ On attend maintenant `contactId` depuis le front
-  console.log("📞 Appel reçu sur /voice :", req.body);
+  const { From, To, contactId } = req.body; // On continue de chercher le contactId ici
+  console.log("📞 Appel reçu sur /voice :", req.body); // Ce log est crucial
 
   const twiml = new twilio.twiml.VoiceResponse();
-
-  // URL du serveur pour construire le callback. Essentiel pour Render.
   const serverUrl = `https://${req.get('host')}`;
 
-  // Options pour le <Dial>. On ajoute le statusCallback ici.
   const dialOptions = {
     record: 'record-from-answer-dual',
-    // ✨ L'URL que Twilio appellera à la fin de l'appel
-    statusCallback: `${serverUrl}/call-status`,
-    statusCallbackEvent: ['completed'], // Uniquement à la fin
+    statusCallback: `${serverUrl}/call-status`, // L'URL de base
+    statusCallbackEvent: ['completed'],
     statusCallbackMethod: 'POST'
   };
 
-  const isOutgoing = From?.startsWith('client:');
-  
-  if (isOutgoing) { // Appel sortant
-    const identity = From.replace('client:', '').toLowerCase();
+  // --- LOGIQUE CORRIGÉE ---
+  // Un appel sortant est un appel initié DEPUIS le navigateur.
+  // On le reconnaît s'il vient d'un 'client:' OU si un 'contactId' a été passé.
+  const isOutgoingFromBrowser = From?.startsWith('client:') || contactId;
+
+  if (isOutgoingFromBrowser) {
+    console.log("✅ Détecté comme un appel sortant depuis le navigateur.");
+    
+    // L'identité de l'appelant est soit extraite du 'client:', soit on la recherche
+    const identity = From.startsWith('client:') 
+      ? From.replace('client:', '').toLowerCase()
+      : Object.keys(employeeTwilioMap).find(key => employeeTwilioMap[key] === To);
+      
     dialOptions.callerId = employeeTwilioMap[identity];
-    if (contactId) { // ✨ On ajoute le contactId à l'URL de callback s'il existe
+    
+    if (contactId) {
+      // On ajoute le contactId à l'URL de callback s'il existe
       dialOptions.statusCallback += `?contactId=${contactId}`;
     }
+    
     const dial = twiml.dial(dialOptions);
+    // Le numéro à appeler est dans 'To' pour les appels sortants via .connect()
     dial.number(To);
     console.log(`🔄 Appel sortant vers ${To} avec callback vers ${dialOptions.statusCallback}`);
-  } else { // Appel entrant
+
+  } else { // Appel entrant (un client externe appelle votre numéro Twilio)
+    console.log("📥 Détecté comme un appel entrant standard.");
     const calledNumber = To;
     const employeeEntry = Object.entries(employeeTwilioMap).find(([_, num]) => num === calledNumber);
+
     if (!employeeEntry) {
       console.error("❌ Aucun employé trouvé pour ce numéro Twilio :", calledNumber);
       twiml.say({ language: 'fr-FR' }, 'Aucun agent disponible pour prendre cet appel.');
     } else {
       const targetIdentity = employeeEntry[0];
-      const dial = twiml.dial(dialOptions);
+      const dial = twiml.dial(dialOptions); // Le callback ici n'aura pas d'ID de contact
       dial.client(targetIdentity);
       console.log(`📥 Appel entrant de ${From} redirigé vers ${targetIdentity}`);
     }
