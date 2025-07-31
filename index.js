@@ -9,14 +9,23 @@ const { Client } = require('@hubspot/api-client'); // ← NOUVEAU : Import du cl
 const app = express();
 
 // 🛡️ Middlewares
-const allowedOrigins = ['https://app.hubspot.com', 'https://click-to-call-app.onrender.com']; // ← adapte ici
+const allowedOrigins = ['https://app.hubspot.com']; // ← adapte ici
 app.use(cors({
   origin: function (origin, callback) {
-    if (!origin || allowedOrigins.includes(origin)) {
+    // Autoriser les requêtes sans origine (ex: Postman, curl)
+    if (!origin) {
       return callback(null, true);
-    } else {
-      return callback(new Error('CORS non autorisé : ' + origin));
     }
+    // Autoriser les origines de la liste
+    if (allowedOrigins.includes(origin)) {
+      return callback(null, true);
+    }
+    // ✨ NOUVEAU : Autoriser TOUTES les extensions Chrome
+    if (origin.startsWith('chrome-extension://')) {
+      return callback(null, true);
+    }
+    // Sinon, refuser
+    return callback(new Error('CORS non autorisé pour cette origine : ' + origin));
   }
 }));
 
