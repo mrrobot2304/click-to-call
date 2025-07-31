@@ -284,8 +284,11 @@ app.post('/recording-callback', (req, res) => {
   res.sendStatus(200);
 });
 
+
 // Route de ping pour empêcher Render de mettre en veille l'app
 app.get('/ping', (req, res) => {
+  // ✅ NOUVEAU LOG : Affiche un message à chaque ping reçu
+  console.log(`Ping received at ${new Date().toISOString()}. Server is awake. Responding with pong.`);
   res.status(200).send('pong');
 });
 
